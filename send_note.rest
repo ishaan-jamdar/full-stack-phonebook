@@ -1,7 +1,0 @@
-POST http://localhost:3001/api/entries
-Content-Type: application/json
-
-{
-  "name": "jake",
-  "number": "00000"
-}

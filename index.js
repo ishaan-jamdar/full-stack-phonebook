@@ -1,7 +1,9 @@
+require('dotenv').config()
 const express = require('express')
+const app = express()
 const morgan = require('morgan')
 const cors = require('cors')
-const app = express()
+const Person = require('./models/person')
 
 app.use(cors())
 app.use(express.static('build'))
@@ -45,35 +47,38 @@ app.get('/info', (request, response) => {
 })
 
 app.get('/api/entries', (request, response) => {
-  response.json(entries)
+  Person.find({}).then(entries => {
+    response.json(entries)
+  })
 })
 
 app.get('/api/entries/:id', (request, response) => {
-  const id = Number(request.params.id)
-  const entry = entries.find(entry => entry.id === id)
-  if (entry) {
-    response.json(entry)
-  }
-  response.status(404).end()
+  Person.findById(request.params.id)
+    .then(entry => {
+      response.json(entry)
+    })
+    .catch(err => {
+      response.status(404).json({ error: 'invalid entry' })
+    })
 })
 
 app.post('/api/entries', (request, response) => {
   const entry = request.body
-  entry.id = Math.floor(Math.random() * 1000000000)
 
-  if (!entry.name || !entry.number) {
-    return response.status(400).json({
-      error: 'name or number missing'
-    })
-  } else if (entries.find(existing => existing.name === entry.name)) {
-    return response.status(400).json({
-      error: 'name must be unique'
-    })
+  if (entry.name === undefined) {
+    return response.status(400).json({ error: 'name missing' })
+  } else if (entry.number === undefined) {
+    return response.status(400).json({ error: 'number missing' })
   }
 
-  entries = entries.concat(entry)
+  const person = new Person({
+    name: entry.name,
+    number: entry.number,
+  })
 
-  response.json(entry)
+  person.save().then(savedEntry => {
+    response.json(savedEntry)
+  })
 })
 
 app.delete('/api/entries/:id', (request, response) => {
