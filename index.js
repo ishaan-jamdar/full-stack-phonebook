@@ -5,9 +5,9 @@ const morgan = require('morgan')
 const cors = require('cors')
 const Person = require('./models/person')
 
-app.use(cors())
 app.use(express.static('build'))
 app.use(express.json())
+app.use(cors())
 morgan.token('content', (req, res) => {
   for (let item in req.body) {
     return JSON.stringify(req.body)
@@ -15,35 +15,14 @@ morgan.token('content', (req, res) => {
 })
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :content'))
 
-let entries = [
-  { 
-    "id": 1,
-    "name": "Arto Hellas", 
-    "number": "040-123456"
-  },
-  { 
-    "id": 2,
-    "name": "Ada Lovelace", 
-    "number": "39-44-5323523"
-  },
-  { 
-    "id": 3,
-    "name": "Dan Abramov", 
-    "number": "12-43-234345"
-  },
-  { 
-    "id": 4,
-    "name": "Mary Poppendieck", 
-    "number": "39-23-6423122"
-  }
-]
-
 app.get('/', (request, response) => {
   response.send('<h1>Hello World</h1>')
 })
 
 app.get('/info', (request, response) => {
-  response.send(`<p>Phonebook has info for ${entries.length} people</p><p>${new Date()}</p>`)
+  Person.countDocuments({}).then(count => {
+    response.send(`<p>Phonebook has info for ${count} people</p><p>${new Date()}</p>`)
+  })
 })
 
 app.get('/api/entries', (request, response) => {
@@ -52,14 +31,12 @@ app.get('/api/entries', (request, response) => {
   })
 })
 
-app.get('/api/entries/:id', (request, response) => {
+app.get('/api/entries/:id', (request, response, next) => {
   Person.findById(request.params.id)
     .then(entry => {
       response.json(entry)
     })
-    .catch(err => {
-      response.status(404).json({ error: 'invalid entry' })
-    })
+    .catch(err => next(err))
 })
 
 app.post('/api/entries', (request, response) => {
@@ -81,12 +58,45 @@ app.post('/api/entries', (request, response) => {
   })
 })
 
-app.delete('/api/entries/:id', (request, response) => {
-  const id = Number(request.params.id)
-  entries = entries.filter(entry => entry.id !== id)
+app.put('/api/entries/:id', (request, response, next) => {
+  const entry = request.body
 
-  response.status(204).end()
+  const updatedEntry = {
+    number: entry.number,
+  }
+
+  Person.findByIdAndUpdate(request.params.id, updatedEntry, { new: true })
+    .then(newEntry => {
+      response.json(newEntry)
+    })
+    .catch(err => next(err))
 })
+
+app.delete('/api/entries/:id', (request, response, next) => {
+  Person.findByIdAndRemove(request.params.id)
+    .then(res => {
+      response.status(204).end()
+    })
+    .catch(err => next(err))
+})
+
+const unknownEndpoint = (request, response) => {
+  response.status(404).send({ error: 'unknown endpoint' })
+}
+
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+  console.log(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
